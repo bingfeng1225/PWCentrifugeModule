@@ -132,6 +132,7 @@ public class CentrifugeSerialPort implements PWSerialPortListener {
         PWLogger.d("Centrifuge Send:" + ByteUtils.bytes2HexString(data, true, ", "));
         if (this.isInitialized() && this.enabled) {
             this.helper.writeAndFlush(data);
+            CentrifugeSerialPort.this.switchReadModel();
         }
     }
 
@@ -242,7 +243,6 @@ public class CentrifugeSerialPort implements PWSerialPortListener {
                     if (EmptyUtils.isNotEmpty(message)) {
                         CentrifugeSerialPort.this.write(message);
                     }
-                    CentrifugeSerialPort.this.switchReadModel();
                     break;
                 }
                 default:
