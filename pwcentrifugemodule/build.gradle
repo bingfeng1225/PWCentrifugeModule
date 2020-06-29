@@ -26,7 +26,6 @@ android {
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation 'com.github.bingfeng1225:PWLog4j:1.0.0'
-    implementation 'com.github.bingfeng1225:PWTools:7e4b74ed8f'
-    implementation 'com.github.bingfeng1225:PWSerialPort:1.1.4'
+    implementation 'com.github.bingfeng1225:PWSerialPort:1.1.5'
     implementation group: 'io.netty', name: 'netty-all', version: '4.1.43.Final'
 }

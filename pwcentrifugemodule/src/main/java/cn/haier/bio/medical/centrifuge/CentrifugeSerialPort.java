@@ -8,16 +8,14 @@ import android.os.Message;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 
-import cn.haier.bio.medical.centrifuge.tools.CentrifugeTools;
 import cn.qd.peiwen.pwlogger.PWLogger;
-import cn.qd.peiwen.pwtools.ByteUtils;
-import cn.qd.peiwen.pwtools.EmptyUtils;
 import cn.qd.peiwen.serialport.PWSerialPortHelper;
 import cn.qd.peiwen.serialport.PWSerialPortListener;
+import cn.qd.peiwen.serialport.PWSerialPortState;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 
-public class CentrifugeSerialPort implements PWSerialPortListener {
+class CentrifugeSerialPort implements PWSerialPortListener {
     private ByteBuf buffer;
     private HandlerThread thread;
     private CentrifugeHandler handler;
@@ -70,20 +68,20 @@ public class CentrifugeSerialPort implements PWSerialPortListener {
     }
 
     private boolean isInitialized() {
-        if (EmptyUtils.isEmpty(this.handler)) {
+        if (this.handler == null) {
             return false;
         }
-        if (EmptyUtils.isEmpty(this.helper)) {
+        if (this.helper == null) {
             return false;
         }
-        if (EmptyUtils.isEmpty(this.buffer)) {
+        if (this.buffer == null) {
             return false;
         }
         return true;
     }
 
     private void createHelper(String path) {
-        if (EmptyUtils.isEmpty(this.helper)) {
+        if (this.helper == null) {
             this.helper = new PWSerialPortHelper("CentrifugeSerialPort");
             this.helper.setTimeout(3);
             this.helper.setPath(path);
@@ -93,14 +91,14 @@ public class CentrifugeSerialPort implements PWSerialPortListener {
     }
 
     private void destoryHelper() {
-        if (EmptyUtils.isNotEmpty(this.helper)) {
+        if (null != this.helper) {
             this.helper.release();
             this.helper = null;
         }
     }
 
     private void createHandler() {
-        if (EmptyUtils.isEmpty(this.thread) && EmptyUtils.isEmpty(this.handler)) {
+        if (this.thread == null && this.handler == null) {
             this.thread = new HandlerThread("CentrifugeSerialPort");
             this.thread.start();
             this.handler = new CentrifugeHandler(this.thread.getLooper());
@@ -108,7 +106,7 @@ public class CentrifugeSerialPort implements PWSerialPortListener {
     }
 
     private void destoryHandler() {
-        if (EmptyUtils.isNotEmpty(this.thread)) {
+        if (null != this.thread) {
             this.thread.quitSafely();
             this.thread = null;
             this.handler = null;
@@ -116,20 +114,20 @@ public class CentrifugeSerialPort implements PWSerialPortListener {
     }
 
     private void createBuffer() {
-        if (EmptyUtils.isEmpty(this.buffer)) {
+        if (this.buffer == null) {
             this.buffer = Unpooled.buffer(4);
         }
     }
 
     private void destoryBuffer() {
-        if (EmptyUtils.isNotEmpty(this.buffer)) {
+        if (null != this.buffer) {
             this.buffer.release();
             this.buffer = null;
         }
     }
 
     private void write(byte[] data) {
-        PWLogger.d("Centrifuge Send:" + ByteUtils.bytes2HexString(data, true, ", "));
+        PWLogger.d("Centrifuge Send:" + CentrifugeTools.bytes2HexString(data, true, ", "));
         if (this.isInitialized() && this.enabled) {
             this.helper.writeAndFlush(data);
             CentrifugeSerialPort.this.switchReadModel();
@@ -137,13 +135,13 @@ public class CentrifugeSerialPort implements PWSerialPortListener {
     }
 
     public void switchReadModel() {
-        if (EmptyUtils.isNotEmpty(this.listener)) {
+        if (null != this.listener && null != this.listener.get()) {
             this.listener.get().onCentrifugeSwitchReadModel();
         }
     }
 
     public void switchWriteModel() {
-        if (EmptyUtils.isNotEmpty(this.listener)) {
+        if (null != this.listener && null != this.listener.get()) {
             this.listener.get().onCentrifugeSwitchWriteModel();
         }
     }
@@ -156,7 +154,7 @@ public class CentrifugeSerialPort implements PWSerialPortListener {
             byte[] data = new byte[index];
             this.buffer.readBytes(data, 0, data.length);
             this.buffer.discardReadBytes();
-            PWLogger.d("指令丢弃:" + ByteUtils.bytes2HexString(data, true, ", "));
+            PWLogger.d("指令丢弃:" + CentrifugeTools.bytes2HexString(data, true, ", "));
         }
         return result;
     }
@@ -169,19 +167,29 @@ public class CentrifugeSerialPort implements PWSerialPortListener {
         }
         this.buffer.clear();
         this.switchReadModel();
-        if (EmptyUtils.isNotEmpty(this.listener)) {
+        if (null != this.listener && null != this.listener.get()) {
             this.listener.get().onCentrifugeConnected();
         }
     }
 
     @Override
-    public void onException(PWSerialPortHelper helper) {
+    public void onReadThreadReleased(PWSerialPortHelper helper) {
+
+    }
+
+    @Override
+    public void onException(PWSerialPortHelper helper, Throwable throwable) {
         if (!this.isInitialized() || !helper.equals(this.helper)) {
             return;
         }
-        if (EmptyUtils.isNotEmpty(this.listener)) {
-            this.listener.get().onCentrifugeException();
+        if (null != this.listener && null != this.listener.get()) {
+            this.listener.get().onCentrifugeException(throwable);
         }
+    }
+
+    @Override
+    public void onStateChanged(PWSerialPortHelper helper, PWSerialPortState state) {
+
     }
 
     @Override
@@ -221,9 +229,9 @@ public class CentrifugeSerialPort implements PWSerialPortListener {
                 continue;
             }
             this.buffer.discardReadBytes();
-            PWLogger.d("Centrifuge Recv:" + ByteUtils.bytes2HexString(data, true, ", "));
+            PWLogger.d("Centrifuge Recv:" + CentrifugeTools.bytes2HexString(data, true, ", "));
             this.switchWriteModel();
-            if(EmptyUtils.isNotEmpty(this.listener)){
+            if(null != this.listener && null != this.listener.get()){
                 this.listener.get().onCentrifugePackageReceived(data);
             }
         }
@@ -240,7 +248,7 @@ public class CentrifugeSerialPort implements PWSerialPortListener {
             switch (msg.what) {
                 case 0: {
                     byte[] message = (byte[]) msg.obj;
-                    if (EmptyUtils.isNotEmpty(message)) {
+                    if (null != message && message.length > 0) {
                         CentrifugeSerialPort.this.write(message);
                     }
                     break;
