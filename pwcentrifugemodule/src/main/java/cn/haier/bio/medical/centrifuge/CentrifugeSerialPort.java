@@ -146,25 +146,62 @@ class CentrifugeSerialPort implements PWSerialPortListener {
         }
     }
 
-    private void loggerPrint(String message){
+    private void loggerPrint(String message) {
         if (null != this.listener && null != this.listener.get()) {
             this.listener.get().onCentrifugePrint(message);
         }
     }
 
     private boolean ignorePackage() {
-        boolean result = false;
         int index = CentrifugeTools.indexOf(this.buffer, CentrifugeTools.HEADER);
         if (index != -1) {
-            result = true;
             byte[] data = new byte[index];
             this.buffer.readBytes(data, 0, data.length);
             this.buffer.discardReadBytes();
             this.loggerPrint("CentrifugeSerialPort 指令丢弃:" + CentrifugeTools.bytes2HexString(data, true, ", "));
+            return this.processBytesBuffer();
         }
-        return result;
+        return false;
     }
 
+
+    private boolean processBytesBuffer() {
+        if (this.buffer.readableBytes() < 3) {
+            return true;
+        }
+
+        byte[] header = new byte[CentrifugeTools.HEADER.length];
+        this.buffer.getBytes(0, header);
+
+        if (!CentrifugeTools.checkHeader(header)) {
+            return this.ignorePackage();
+        }
+        int length = 0xFF & this.buffer.getByte(2);
+
+        if (this.buffer.readableBytes() < length + 3) {
+            return true;
+        }
+
+        this.buffer.markReaderIndex();
+
+        byte[] data = new byte[length + 3];
+        this.buffer.readBytes(data, 0, data.length);
+
+        if (!CentrifugeTools.checkFrame(data)) {
+            this.buffer.resetReaderIndex();
+            //当前包不合法 丢掉正常的包头以免重复判断
+            this.buffer.skipBytes(CentrifugeTools.HEADER.length);
+            this.buffer.discardReadBytes();
+            return this.ignorePackage();
+        }
+        this.buffer.discardReadBytes();
+        this.loggerPrint("CentrifugeSerialPort Recv:" + CentrifugeTools.bytes2HexString(data, true, ", "));
+        this.switchWriteModel();
+        if (null != this.listener && null != this.listener.get()) {
+            this.listener.get().onCentrifugePackageReceived(data);
+        }
+        return true;
+    }
 
     @Override
     public void onConnected(PWSerialPortHelper helper) {
@@ -209,48 +246,13 @@ class CentrifugeSerialPort implements PWSerialPortListener {
     }
 
     @Override
-    public void onByteReceived(PWSerialPortHelper helper, byte[] buffer, int length) throws IOException {
+    public boolean onByteReceived(PWSerialPortHelper helper, byte[] buffer, int length) throws IOException {
         if (!this.isInitialized() || !helper.equals(this.helper)) {
-            return;
+            return false;
         }
         this.buffer.writeBytes(buffer, 0, length);
 
-        while (this.buffer.readableBytes() >= 3) {
-            byte[] header = new byte[CentrifugeTools.HEADER.length];
-            this.buffer.getBytes(0, header);
-
-            if (!CentrifugeTools.checkHeader(header)) {
-                if (this.ignorePackage()) {
-                    continue;
-                } else {
-                    break;
-                }
-            }
-            int lenth = 0xFF & this.buffer.getByte(2);
-
-            if (this.buffer.readableBytes() < lenth + 3) {
-                break;
-            }
-
-            this.buffer.markReaderIndex();
-
-            byte[] data = new byte[lenth + 3];
-            this.buffer.readBytes(data, 0, data.length);
-
-            if (!CentrifugeTools.checkFrame(data)) {
-                this.buffer.resetReaderIndex();
-                //当前包不合法 丢掉正常的包头以免重复判断
-                this.buffer.skipBytes(CentrifugeTools.HEADER.length);
-                this.buffer.discardReadBytes();
-                continue;
-            }
-            this.buffer.discardReadBytes();
-            this.loggerPrint("CentrifugeSerialPort Recv:" + CentrifugeTools.bytes2HexString(data, true, ", "));
-            this.switchWriteModel();
-            if(null != this.listener && null != this.listener.get()){
-                this.listener.get().onCentrifugePackageReceived(data);
-            }
-        }
+        return this.processBytesBuffer();
     }
 
     private class CentrifugeHandler extends Handler {
